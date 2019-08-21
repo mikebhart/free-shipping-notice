@@ -1,0 +1,182 @@
+ wp_register_script( 'case_studies_ajax_loadmore', get_template_directory_uri() . '/js/case-studies.js', array(), '1.0.0', true );
+  
+  global $wp_query; 
+   
+  $case_studies_array = array(
+                              'ajaxurl' => site_url() . '/wp-admin/admin-ajax.php', 
+                              'posts' => json_encode( $wp_query->query_vars ), 
+                              'current_page' => get_query_var( 'paged' ) ? get_query_var('paged') : 1,
+                              'max_page' => $_SESSION['cs_max_pages']
+                              );
+  
+  
+  wp_localize_script( 'case_studies_ajax_loadmore', 'cs_loadmore_params',  $case_studies_array );
+  wp_enqueue_script( 'case_studies_ajax_loadmore' 
+
+
+  jQuery(function($){ // use jQuery code inside this to avoid "$ is not defined" error
+
+  
+  $( "#case-studies-filter-btn" ).click(function() {
+              
+    $('.case-studies-ajax-loadmore').case_studies_get_data();
+    
+  });
+    
+});
+
+
+(function( $ ){
+  
+   $.fn.case_studies_get_data = function() {
+  
+      var sector = document.getElementById("sector-select").value;
+      var keymarket = document.getElementById("keymarket-select").value;
+     
+             
+                var button = $(this),
+                    data = {
+                    'action': 'loadmore',
+                    'query': cs_loadmore_params.posts, // that's how we get params from wp_localize_script() function
+                    'page' : cs_loadmore_params.current_page,
+                    'sector_chosen' : sector,
+                    'keymarket_chosen' : keymarket 
+                };
+
+                $.ajax({ // you can also use $.post here
+                    url : cs_loadmore_params.ajaxurl, // AJAX handler
+                    data : data,
+                    type : 'POST',
+                    beforeSend : function ( xhr ) {
+                       // button.text('Loading...'); // change the button text, you can also add a preloader image
+                    },
+                    success : function( data ){
+                      
+                        if( data ) { 
+                          
+                          $(".case-studies-ajax-holder").html("");
+                          $(".case-studies-ajax-holder").append(data);
+                          
+                            button.text( 'More posts again' ).prev().before(data); // insert new posts
+
+                            if ( cs_loadmore_params.current_page == cs_loadmore_params.max_page ) 
+                                button.remove(); // if last page, remove the button
+
+                            // you can also fire the "post-load" event here if you use a plugin that requires it
+                            // $( document.body ).trigger( 'post-load' );
+                        } else {
+                            button.remove(); // if no data, remove the button as well
+                        }
+                         cs_loadmore_params.current_page++;
+                    }
+                });
+   }; 
+})( jQuery );
+
+
+ <div class="case-studies-ajax-loadmore"></div>
+
+ <?php
+
+function ajax_scripts() {
+    // Case Studies AJAX
+  wp_register_script( 'case_studies_ajax_loadmore', get_template_directory_uri() . '/js/case-studies.js', array(), '1.0.0', true );
+  
+  global $wp_query; 
+   
+  $case_studies_array = array(
+                              'ajaxurl' => site_url() . '/wp-admin/admin-ajax.php', 
+                              'posts' => json_encode( $wp_query->query_vars ), 
+                              'current_page' => get_query_var( 'paged' ) ? get_query_var('paged') : 1,
+                              'max_page' => $_SESSION['cs_max_pages']
+                              );
+  
+  
+  wp_localize_script( 'case_studies_ajax_loadmore', 'cs_loadmore_params',  $case_studies_array );
+  wp_enqueue_script( 'case_studies_ajax_loadmore' );
+ 
+}
+add_action( 'wp_enqueue_scripts', 'ajax_scripts' );
+
+function case_studies_loadmore_ajax_handler() {
+  
+  global $wp_query; 
+  
+  $args = null;
+  $query_relation = "OR";
+  $sector_chosen = $_POST['sector_chosen']; 
+  $keymarket_chosen = $_POST['keymarket_chosen']; 
+  $paged =  $_POST['page']; 
+ 
+  if ($sector_chosen !== 'allsectors' && $keymarket_chosen !== 'allkeymarkets') {
+    $query_relation = "AND"; 
+  } 
+
+  if ($sector_chosen == 'allsectors' && $keymarket_chosen == 'allkeymarkets' ) {
+
+      $args = array('post_type' => 'case_studies',
+                    'orderby' => 'title',
+                    'order'   => 'ASC',
+                    'posts_per_page' => 100);
+      } else {
+
+        $args = array (
+          'post_type' => 'case_studies',
+          'orderby' => 'title',
+          'order'   => 'ASC',
+          'posts_per_page' => 100,
+          'tax_query' => array(
+          'relation' => $query_relation,
+              array (
+                     'taxonomy' => 'sectors',
+                     'field' => 'slug',
+                    'terms' => $sector_chosen
+             ),
+             array (
+                   'taxonomy' => 'key_markets',
+                   'field' => 'slug',
+                   'terms' => $keymarket_chosen
+             )          
+          )
+        );
+
+   }
+
+   $posts = query_posts($args);
+   $_SESSION['cs_max_pages'] = $wp_query->max_num_pages;
+
+   if( have_posts() ) :
+ 
+        // run the loop
+        while( have_posts() ): the_post();
+ 
+              echo '<div class="col-lg-4 col-md-6 mb-5">';
+              echo '<div class="case-studies-archive-item-card h-100">';
+              echo '<a href="' . esc_url(get_permalink()) . '">';
+              echo '<div class="case-studies-archive-item-card-image">';
+                    if ( has_post_thumbnail() ) {
+                      the_post_thumbnail( 'card-thumbnail' );
+                    }
+              echo '</div>';
+              echo '<div class="case-studies-archive-item-card-text-wrapper">';
+              echo '<div class="p-5">';
+              echo '<h3>' . get_the_title() . '</h3>';
+              echo '<p class="font16">' . get_the_excerpt() .'</p>';
+              echo '</div>';
+              echo '</div>';
+              echo '</a>';
+              echo '</div>';
+              echo '</div>';
+ 
+        endwhile;
+    
+        wp_reset_query();
+        wp_reset_postdata();
+ 
+    endif;
+
+  die; 
+    
+}
+add_action('wp_ajax_loadmore', 'case_studies_loadmore_ajax_handler'); 
+add_action('wp_ajax_nopriv_loadmore', 'case_studies_loadmore_ajax_handler'); 
